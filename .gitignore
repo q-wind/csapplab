@@ -1,2 +1,7 @@
 # ignore source tar file
 *.tar
+
+# datalab
+datalab-handout/btest
+datalab-handout/ishow
+datalab-handout/fshow
