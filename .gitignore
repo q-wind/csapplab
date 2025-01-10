@@ -5,3 +5,6 @@
 datalab-handout/btest
 datalab-handout/ishow
 datalab-handout/fshow
+
+# bomblab
+bomb/.gdb_*
