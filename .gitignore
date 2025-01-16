@@ -1,10 +1,15 @@
 # ignore source tar file
 *.tar
 
+# gdb history or log
+*/.gdb_*
+
 # datalab
 datalab-handout/btest
 datalab-handout/ishow
 datalab-handout/fshow
 
 # bomblab
-bomb/.gdb_*
+
+# attacklab
+
