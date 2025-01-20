@@ -11,3 +11,8 @@
 
 # return program
 
+# lv2
+# ./hex2raw < ./solution/rt2.txt | ./rtarget -q
+
+# lv3
+./hex2raw < ./solution/rt3.txt | ./rtarget -q
