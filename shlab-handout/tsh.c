@@ -39,7 +39,7 @@
 extern char **environ;      /* defined in libc */
 char prompt[] = "tsh> ";    /* command line prompt (DO NOT CHANGE) */
 int verbose = 0;            /* if true, print additional output */
-int nextjid = 1;            /* next job ID to allocate */
+// int nextjid = 1;            /* next job ID to allocate */
 char sbuf[MAXLINE];         /* for composing sprintf messages */
 
 struct job_t {              /* The job struct */
@@ -49,6 +49,7 @@ struct job_t {              /* The job struct */
     char cmdline[MAXLINE];  /* command line */
 };
 struct job_t jobs[MAXJOBS]; /* The job list */
+int jidused[MAXJOBS + 1];   /* mark whether the job ID is used */
 /* End global variables */
 
 
@@ -308,6 +309,8 @@ void initjobs(struct job_t *jobs) {
 
     for (i = 0; i < MAXJOBS; i++)
 	clearjob(&jobs[i]);
+
+    memset(jidused, 0, sizeof(jidused));
 }
 
 /* maxjid - Returns largest allocated job ID */
@@ -335,14 +338,22 @@ int addjob(struct job_t *jobs, pid_t pid, int state, char *cmdline)
 	if (jobs[i].pid == 0) {
 	    jobs[i].pid = pid;
 	    jobs[i].state = state;
-	    jobs[i].jid = nextjid++;
-	    if (nextjid > MAXJOBS)
-		nextjid = 1;
+	    // jobs[i].jid = nextjid++;
+	    // if (nextjid > MAXJOBS)
+		// nextjid = 1;
+        for (int j = 1; j <= MAXJOBS; j++) {
+            if (!jidused[j]) {
+                jobs[i].jid = j;
+                jidused[j] = 1;
+                break;
+            }
+        }
+
 	    strcpy(jobs[i].cmdline, cmdline);
   	    if(verbose){
 	        printf("Added job [%d] %d %s\n", jobs[i].jid, jobs[i].pid, jobs[i].cmdline);
-            }
-            return 1;
+        }
+        return 1;
 	}
     }
     printf("Tried to create too many jobs\n");
@@ -359,8 +370,9 @@ int deletejob(struct job_t *jobs, pid_t pid)
 
     for (i = 0; i < MAXJOBS; i++) {
 	if (jobs[i].pid == pid) {
+        jidused[jobs[i].jid] = 0;
 	    clearjob(&jobs[i]);
-	    nextjid = maxjid(jobs)+1;   // 删除 job 只使得后一次 addjob() 的 nextjid 合法
+	    // nextjid = maxjid(jobs)+1;   // 删除 job 只使得后一次 addjob() 的 nextjid 合法
 	    return 1;
 	}
     }
