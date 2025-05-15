@@ -1,6 +1,6 @@
 /* 
  * tsh - A tiny shell program with job control
- * 
+ * q-wind
  * <Put your name and login ID here>
  */
 #include <stdio.h>
@@ -329,6 +329,8 @@ int addjob(struct job_t *jobs, pid_t pid, int state, char *cmdline)
     if (pid < 1)
 	return 0;
 
+    // 找一个空位放入 job，但是 jid 的逻辑对吗？
+    // 如果 job1 一直没结束，其他先释放，在加一个 job 会得到相同 jobid ？
     for (i = 0; i < MAXJOBS; i++) {
 	if (jobs[i].pid == 0) {
 	    jobs[i].pid = pid;
@@ -358,7 +360,7 @@ int deletejob(struct job_t *jobs, pid_t pid)
     for (i = 0; i < MAXJOBS; i++) {
 	if (jobs[i].pid == pid) {
 	    clearjob(&jobs[i]);
-	    nextjid = maxjid(jobs)+1;
+	    nextjid = maxjid(jobs)+1;   // 删除 job 只使得后一次 addjob() 的 nextjid 合法
 	    return 1;
 	}
     }
