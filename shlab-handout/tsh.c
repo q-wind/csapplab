@@ -86,6 +86,10 @@ void app_error(char *msg);
 typedef void handler_t(int);
 handler_t *Signal(int signum, handler_t *handler);
 
+/* Wrappers for system call */
+pid_t Fork(void);
+pid_t Waitpid(pid_t pid, int* iptr, int options);
+
 /*
  * main - The shell's main routine 
  */
@@ -166,6 +170,32 @@ int main(int argc, char **argv)
 */
 void eval(char *cmdline) 
 {
+    char* argv[MAXARGS];
+    int bg;
+    pid_t pid;
+
+    bg = parseline(cmdline, argv);
+    if (argv[0] == NULL) {
+        return;     // empty line
+    }
+
+    if (!builtin_cmd(argv)) {   // builtin
+        // command line
+        if ((pid = Fork()) == 0) {
+            if (execve(argv[0], argv, environ) < 0) {
+                printf("%s: Command not found\n", argv[0]);
+                exit(0);        // no command: child exit
+            }
+        }
+
+        if (!bg) {
+            waitfg(pid);
+        } else {
+            int jid = addjob(jobs, pid, BG, cmdline);
+            printf("[%d] (%d) %s", jid, pid, cmdline);
+        }
+    }
+
     return;
 }
 
@@ -190,6 +220,7 @@ int parseline(const char *cmdline, char **argv)
 	buf++;
 
     /* Build the argv list */
+    // 一个参数可以由 '' 括起，也可以由 空格 间隔
     argc = 0;
     if (*buf == '\'') {
 	buf++;
@@ -232,6 +263,13 @@ int parseline(const char *cmdline, char **argv)
  */
 int builtin_cmd(char **argv) 
 {
+    if (!strcmp(argv[0], "quit")) {
+        exit(0);
+    }
+    if (!strcmp(argv[0], "jobs")) {
+        listjobs(jobs);
+        return 1;
+    }
     return 0;     /* not a builtin command */
 }
 
@@ -240,6 +278,7 @@ int builtin_cmd(char **argv)
  */
 void do_bgfg(char **argv) 
 {
+    
     return;
 }
 
@@ -248,6 +287,8 @@ void do_bgfg(char **argv)
  */
 void waitfg(pid_t pid)
 {
+    int status;
+    Waitpid(pid, &status, 0);
     return;
 }
 
@@ -274,6 +315,7 @@ void sigchld_handler(int sig)
  */
 void sigint_handler(int sig) 
 {
+    
     return;
 }
 
@@ -332,12 +374,12 @@ int addjob(struct job_t *jobs, pid_t pid, int state, char *cmdline)
     if (pid < 1)
 	return 0;
 
-    // 找一个空位放入 job，但是 jid 的逻辑对吗？
-    // 如果 job1 一直没结束，其他先释放，在加一个 job 会得到相同 jobid ？
     for (i = 0; i < MAXJOBS; i++) {
 	if (jobs[i].pid == 0) {
 	    jobs[i].pid = pid;
 	    jobs[i].state = state;
+        // 找一个空位放入 job，但是 jid 的逻辑对吗？
+        // 如果 job1 一直没结束，其他先释放，在加一个 job 会得到相同 jobid ？
 	    // jobs[i].jid = nextjid++;
 	    // if (nextjid > MAXJOBS)
 		// nextjid = 1;
@@ -353,7 +395,7 @@ int addjob(struct job_t *jobs, pid_t pid, int state, char *cmdline)
   	    if(verbose){
 	        printf("Added job [%d] %d %s\n", jobs[i].jid, jobs[i].pid, jobs[i].cmdline);
         }
-        return 1;
+        return jobs[i].jid;
 	}
     }
     printf("Tried to create too many jobs\n");
@@ -520,4 +562,22 @@ void sigquit_handler(int sig)
 }
 
 
+/**************************
+ * Wrappers for system call
+ *************************/
 
+pid_t Fork(void)
+{
+    pid_t pid;
+    if ((pid = fork()) < 0)
+        unix_error("Fork error");
+    return pid;
+}
+
+pid_t Waitpid(pid_t pid, int* iptr, int options)
+{
+    pid_t retpid;
+    if ((retpid = waitpid(pid, iptr, options)) < 0)
+        unix_error("Waitpid error");
+    return retpid;
+}
