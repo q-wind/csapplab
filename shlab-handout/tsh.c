@@ -275,7 +275,10 @@ int builtin_cmd(char **argv)
         listjobs(jobs);
         return 1;
     }
-
+    if (!strcmp(argv[0], "bg") || !strcmp(argv[0], "fg")) {
+        do_bgfg(argv);
+        return 1;
+    }
     return 0;     /* not a builtin command */
 }
 
@@ -284,7 +287,50 @@ int builtin_cmd(char **argv)
  */
 void do_bgfg(char **argv) 
 {
-    
+    // empty arg
+    if (!argv[1]) {
+        printf("%s command requires PID or %%jobid argument\n", argv[0]);
+        return;
+    }
+
+    char* endptr;
+    long val;
+    struct job_t* jobptr;
+
+    // get the jobptr
+    if (argv[1][0] == '%') {    // jobid
+        val = strtol(argv[1]+1, &endptr, 10);
+        if (*endptr != '\0') {
+            printf("%s: No such job\n", argv[1]);
+            return;
+        }
+        jobptr = getjobjid(jobs, val);
+        if (jobptr == NULL) {
+            printf("%s: No such job\n", argv[1]);
+            return;
+        }
+    } else {    // pid
+        val = strtol(argv[1], &endptr, 10);
+        if (*endptr != '\0') {
+            printf("(%s): No such process\n", argv[1]);
+            return;
+        }
+        jobptr = getjobpid(jobs, val);
+        if (jobptr == NULL) {
+            printf("%s: No such process\n", argv[1]);
+            return;
+        }
+    }
+
+    if (!strcmp(argv[0], "bg")) {
+        jobptr->state = BG;
+        Kill(-jobptr->pid, SIGCONT);
+        printf("[%d] (%d) %s", jobptr->jid, jobptr->pid, jobptr->cmdline);
+    } else {
+        jobptr->state = FG;
+        Kill(-jobptr->pid, SIGCONT);
+        waitfg(jobptr->pid);
+    }
     return;
 }
 
