@@ -89,6 +89,8 @@ handler_t *Signal(int signum, handler_t *handler);
 /* Wrappers for system call */
 pid_t Fork(void);
 pid_t Waitpid(pid_t pid, int* iptr, int options);
+void Setpgid(pid_t pid, pid_t pgid);
+void Kill(pid_t pid, int signum);
 
 /*
  * main - The shell's main routine 
@@ -182,6 +184,8 @@ void eval(char *cmdline)
     if (!builtin_cmd(argv)) {   // builtin
         // command line
         if ((pid = Fork()) == 0) {
+            // set child pid as its groupid, so that SIGINT will only send to tsh
+            Setpgid(0, 0);
             if (execve(argv[0], argv, environ) < 0) {
                 printf("%s: Command not found\n", argv[0]);
                 exit(0);        // no command: child exit
@@ -189,6 +193,7 @@ void eval(char *cmdline)
         }
 
         if (!bg) {
+            addjob(jobs, pid, FG, cmdline);
             waitfg(pid);
         } else {
             int jid = addjob(jobs, pid, BG, cmdline);
@@ -270,6 +275,7 @@ int builtin_cmd(char **argv)
         listjobs(jobs);
         return 1;
     }
+
     return 0;     /* not a builtin command */
 }
 
@@ -288,7 +294,16 @@ void do_bgfg(char **argv)
 void waitfg(pid_t pid)
 {
     int status;
-    Waitpid(pid, &status, 0);
+    Waitpid(pid, &status, WUNTRACED);   // option=0: 等待终止  =WUNTRACED: 等待终止或停止
+    if (WIFEXITED(status)) {
+        deletejob(jobs, pid);
+    } else if (WIFSIGNALED(status)) {
+        printf("Job [%d] (%d) terminated by signal %d\n", pid2jid(pid), pid, WTERMSIG(status));
+        deletejob(jobs, pid);
+    } else if (WIFSTOPPED(status)) {
+        printf("Job [%d] (%d) stopped by signal %d\n", pid2jid(pid), pid, WSTOPSIG(status));
+        getjobpid(jobs, pid)->state = ST;
+    }
     return;
 }
 
@@ -315,7 +330,9 @@ void sigchld_handler(int sig)
  */
 void sigint_handler(int sig) 
 {
-    
+    // catch and send to the fg job
+    pid_t pid = fgpid(jobs);
+    Kill(-pid, SIGINT);
     return;
 }
 
@@ -326,6 +343,8 @@ void sigint_handler(int sig)
  */
 void sigtstp_handler(int sig) 
 {
+    pid_t pid = fgpid(jobs);
+    Kill(-pid, SIGTSTP);
     return;
 }
 
@@ -580,4 +599,18 @@ pid_t Waitpid(pid_t pid, int* iptr, int options)
     if ((retpid = waitpid(pid, iptr, options)) < 0)
         unix_error("Waitpid error");
     return retpid;
+}
+
+void Setpgid(pid_t pid, pid_t pgid)
+{
+    if (setpgid(pid, pgid) < 0)
+        unix_error("Setpgid error");
+    return;
+}
+
+void Kill(pid_t pid, int signum)
+{
+    if (kill(pid, signum) < 0)
+        unix_error("Kill error");
+    return;
 }
